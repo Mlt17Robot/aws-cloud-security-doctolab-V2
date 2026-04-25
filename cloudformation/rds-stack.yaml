@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Doctolab - RDS Stack (PostgreSQL)
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: Doctolab
+
+  VpcId:
+    Type: String
+
+  PrivateDbSubnetAId:
+    Type: String
+
+  PrivateDbSubnetBId:
+    Type: String
+
+  DbSecurityGroupId:
+    Type: String
+
+  DBName:
+    Type: String
+    Default: doctolab
+
+  DBUsername:
+    Type: String
+    Default: postgres
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+
+Resources:
+
+  DoctolabDbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for Doctolab RDS
+      SubnetIds:
+        - !Ref PrivateDbSubnetAId
+        - !Ref PrivateDbSubnetBId
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-db-subnet-group
+
+  DoctolabPostgresDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub ${EnvironmentName}-postgres-db
+      Engine: postgres
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      StorageType: gp3
+      StorageEncrypted: true
+      MultiAZ: false
+      PubliclyAccessible: false
+      DBName: !Ref DBName
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      VPCSecurityGroups:
+        - !Ref DbSecurityGroupId
+      DBSubnetGroupName: !Ref DoctolabDbSubnetGroup
+      BackupRetentionPeriod: 7
+      DeletionProtection: false
+      AutoMinorVersionUpgrade: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-postgres-db
+
+Outputs:
+  DBInstanceIdentifier:
+    Value: !Ref DoctolabPostgresDB
+
+  DBEndpointAddress:
+    Value: !GetAtt DoctolabPostgresDB.Endpoint.Address
+
+  DBEndpointPort:
+    Value: !GetAtt DoctolabPostgresDB.Endpoint.Port

@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Doctolab - CloudFront Stack (S3 private frontend + ALB API routing + WAF)
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: doctolab
+
+  FrontendBucketName:
+    Type: String
+
+  AlbDnsName:
+    Type: String
+
+  WebACLArn:
+    Type: String
+    Description: ARN of the WAF Web ACL to attach to CloudFront
+
+Resources:
+
+  DoctolabOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub ${EnvironmentName}-oac
+        Description: OAC for private S3 frontend bucket
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  DoctolabCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub ${EnvironmentName} CloudFront Distribution
+        DefaultRootObject: index.html
+        HttpVersion: http2
+        PriceClass: PriceClass_100
+        WebACLId: !Ref WebACLArn
+
+        Origins:
+          - Id: S3FrontendOrigin
+            DomainName: !Sub ${FrontendBucketName}.s3.${AWS::Region}.amazonaws.com
+            OriginPath: /dist
+            S3OriginConfig: {}
+            OriginAccessControlId: !Ref DoctolabOriginAccessControl
+
+          - Id: AlbApiOrigin
+            DomainName: !Ref AlbDnsName
+            CustomOriginConfig:
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginProtocolPolicy: http-only
+              OriginSSLProtocols:
+                - TLSv1.2
+
+        DefaultCacheBehavior:
+          TargetOriginId: S3FrontendOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: AlbApiOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+              - PUT
+              - PATCH
+              - POST
+              - DELETE
+            CachedMethods:
+              - GET
+              - HEAD
+            Compress: true
+            ForwardedValues:
+              QueryString: true
+              Cookies:
+                Forward: all
+
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+
+  DoctolabFrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucketName
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipalReadOnly
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub arn:aws:s3:::${FrontendBucketName}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${DoctolabCloudFrontDistribution}
+
+Outputs:
+  CloudFrontDistributionId:
+    Description: CloudFront Distribution ID
+    Value: !Ref DoctolabCloudFrontDistribution
+
+  CloudFrontDomainName:
+    Description: CloudFront Domain Name
+    Value: !GetAtt DoctolabCloudFrontDistribution.DomainName

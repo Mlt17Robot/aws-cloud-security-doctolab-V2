@@ -1,0 +1,20 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Doctolab - VPC Endpoints stack
+  Adds S3 Gateway Endpoint for private access from EC2 to S3
+
+Resources:
+  S3VpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !ImportValue doctolab-network-VPCId
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !ImportValue doctolab-network-PrivateRouteTableId
+
+Outputs:
+  S3VpcEndpointId:
+    Value: !Ref S3VpcEndpoint
+    Export:
+      Name: !Sub ${AWS::StackName}-S3VpcEndpointId

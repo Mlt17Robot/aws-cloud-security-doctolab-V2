@@ -1,0 +1,141 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Doctolab - Sensitive documents storage stack
+  Private S3 bucket + KMS + strict bucket policy for carte vitale and identity documents
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: doctolab
+
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+Resources:
+
+  SensitiveDocumentsKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for Doctolab sensitive documents bucket encryption
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRootAccountAdministration
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: 'kms:*'
+            Resource: '*'
+
+          - Sid: AllowEC2AppUseOfKey
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:role/doctolab-dev-app-ec2-role
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+
+  SensitiveDocumentsKmsAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub alias/${ProjectName}-${Environment}-sensitive-docs
+      TargetKeyId: !Ref SensitiveDocumentsKmsKey
+
+  SensitiveDocumentsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub ${ProjectName}-${Environment}-sensitive-documents-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !GetAtt SensitiveDocumentsKmsKey.Arn
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+
+  SensitiveDocumentsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SensitiveDocumentsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub arn:aws:s3:::${SensitiveDocumentsBucket}
+              - !Sub arn:aws:s3:::${SensitiveDocumentsBucket}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+          - Sid: DenyIncorrectEncryptionHeader
+            Effect: Deny
+            Principal: '*'
+            Action: s3:PutObject
+            Resource: !Sub arn:aws:s3:::${SensitiveDocumentsBucket}/*
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption: aws:kms
+
+          - Sid: DenyIncorrectKmsKey
+            Effect: Deny
+            Principal: '*'
+            Action: s3:PutObject
+            Resource: !Sub arn:aws:s3:::${SensitiveDocumentsBucket}/*
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption-aws-kms-key-id: !GetAtt SensitiveDocumentsKmsKey.Arn
+
+          - Sid: DenyRequestsNotUsingVpcEndpoint
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub arn:aws:s3:::${SensitiveDocumentsBucket}
+              - !Sub arn:aws:s3:::${SensitiveDocumentsBucket}/*
+            Condition:
+              StringNotEquals:
+                aws:sourceVpce: !ImportValue doctolab-endpoints-stack-S3VpcEndpointId
+
+Outputs:
+  SensitiveDocumentsBucketName:
+    Description: Name of the S3 bucket for sensitive documents
+    Value: !Ref SensitiveDocumentsBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-SensitiveDocumentsBucketName
+
+  SensitiveDocumentsBucketArn:
+    Description: ARN of the S3 bucket for sensitive documents
+    Value: !GetAtt SensitiveDocumentsBucket.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-SensitiveDocumentsBucketArn
+
+  SensitiveDocumentsKmsKeyArn:
+    Description: ARN of the KMS key used for S3 encryption
+    Value: !GetAtt SensitiveDocumentsKmsKey.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-SensitiveDocumentsKmsKeyArn

@@ -1,0 +1,29 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Doctolab - AWS WAF logging configuration to S3 (deploy in us-east-1)
+
+Parameters:
+  WebACLArn:
+    Type: String
+    Description: ARN of the CloudFront WAF Web ACL (must be the us-east-1/global ARN)
+
+  LogBucketArn:
+    Type: String
+    Description: ARN of the S3 bucket used for AWS WAF logs
+
+Resources:
+  DoctolabWafLoggingConfiguration:
+    Type: AWS::WAFv2::LoggingConfiguration
+    Properties:
+      ResourceArn: !Ref WebACLArn
+      LogDestinationConfigs:
+        - !Ref LogBucketArn
+      RedactedFields:
+        - SingleHeader:
+            Name: authorization
+        - SingleHeader:
+            Name: cookie
+
+Outputs:
+  WafLoggingDestination:
+    Description: Logging destination ARN used by AWS WAF
+    Value: !Ref LogBucketArn

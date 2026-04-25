@@ -1,0 +1,83 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Doctolab - ALB Stack
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: Doctolab
+
+  VpcId:
+    Type: String
+
+  PublicSubnetAId:
+    Type: String
+
+  PublicSubnetBId:
+    Type: String
+
+  AppInstanceId:
+    Type: String
+
+  AlbSecurityGroupId:
+    Type: String
+
+Resources:
+
+  AppLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${EnvironmentName}-alb
+      Scheme: internet-facing
+      Type: application
+      SecurityGroups:
+        - !Ref AlbSecurityGroupId
+      Subnets:
+        - !Ref PublicSubnetAId
+        - !Ref PublicSubnetBId
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-alb
+
+  AppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${EnvironmentName}-tg
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      TargetType: instance
+      HealthCheckEnabled: true
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: traffic-port
+      Matcher:
+        HttpCode: 200
+      Targets:
+        - Id: !Ref AppInstanceId
+          Port: 80
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-tg
+
+  AppListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref AppLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AppTargetGroup
+
+Outputs:
+  LoadBalancerArn:
+    Description: ARN of the ALB
+    Value: !Ref AppLoadBalancer
+
+  LoadBalancerDNSName:
+    Description: DNS name of the ALB
+    Value: !GetAtt AppLoadBalancer.DNSName
+
+  TargetGroupArn:
+    Description: ARN of the Target Group
+    Value: !Ref AppTargetGroup

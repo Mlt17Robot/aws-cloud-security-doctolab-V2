@@ -1,0 +1,23 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Doctolab - Frontend S3 Stack (private bucket)
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: doctolab
+
+Resources:
+  DoctolabFrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${EnvironmentName}-frontend-${AWS::AccountId}
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-frontend
+
+Outputs:
+  BucketName:
+    Value: !Ref DoctolabFrontendBucket
+
+  BucketArn:
+    Value: !GetAtt DoctolabFrontendBucket.Arn

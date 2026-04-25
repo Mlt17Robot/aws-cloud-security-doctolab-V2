@@ -1,0 +1,47 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Doctolab - S3 bucket for AWS WAF logs (deploy in us-east-1)
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: doctolab
+
+  LogRetentionDays:
+    Type: Number
+    Default: 7
+    MinValue: 1
+    MaxValue: 30
+
+Resources:
+  WafLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub aws-waf-logs-${EnvironmentName}-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireWafLogsQuickly
+            Status: Enabled
+            ExpirationInDays: !Ref LogRetentionDays
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+
+Outputs:
+  WafLogsBucketName:
+    Description: S3 bucket name for AWS WAF logs
+    Value: !Ref WafLogsBucket
+
+  WafLogsBucketArn:
+    Description: S3 bucket ARN for AWS WAF logs
+    Value: !GetAtt WafLogsBucket.Arn

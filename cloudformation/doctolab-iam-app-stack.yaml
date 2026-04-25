@@ -1,0 +1,104 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Doctolab - IAM role for application EC2
+  Grants least-privilege access to sensitive documents S3 bucket and KMS key
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: doctolab
+
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+  DocumentsStackName:
+    Type: String
+    Default: doctolab-documents-stack
+
+Resources:
+
+  DoctolabAppEc2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-${Environment}-app-ec2-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EC2AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub ${ProjectName}-${Environment}-app-s3-kms-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AllowListSensitiveBucket
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - !ImportValue
+                    'Fn::Sub': ${DocumentsStackName}-SensitiveDocumentsBucketArn
+
+              - Sid: AllowReadWriteSensitiveObjects
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource:
+                  - !Sub
+                    - ${BucketArn}/*
+                    - BucketArn:
+                        !ImportValue
+                          'Fn::Sub': ${DocumentsStackName}-SensitiveDocumentsBucketArn
+
+              - Sid: AllowKmsForSensitiveDocuments
+                Effect: Allow
+                Action:
+                  - kms:Encrypt
+                  - kms:Decrypt
+                  - kms:ReEncrypt*
+                  - kms:GenerateDataKey
+                  - kms:DescribeKey
+                Resource:
+                  - !ImportValue
+                    'Fn::Sub': ${DocumentsStackName}-SensitiveDocumentsKmsKeyArn
+
+  DoctolabAppEc2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub ${ProjectName}-${Environment}-app-ec2-instance-profile
+      Roles:
+        - !Ref DoctolabAppEc2Role
+
+Outputs:
+  AppEc2RoleName:
+    Description: IAM role name for the application EC2 instance
+    Value: !Ref DoctolabAppEc2Role
+    Export:
+      Name: !Sub ${AWS::StackName}-AppEc2RoleName
+
+  AppEc2RoleArn:
+    Description: IAM role ARN for the application EC2 instance
+    Value: !GetAtt DoctolabAppEc2Role.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-AppEc2RoleArn
+
+  AppEc2InstanceProfileName:
+    Description: Instance profile name to attach to the application EC2
+    Value: !Ref DoctolabAppEc2InstanceProfile
+    Export:
+      Name: !Sub ${AWS::StackName}-AppEc2InstanceProfileName
+
+  AppEc2InstanceProfileArn:
+    Description: Instance profile ARN to attach to the application EC2
+    Value: !GetAtt DoctolabAppEc2InstanceProfile.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-AppEc2InstanceProfileArn

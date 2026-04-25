@@ -1,0 +1,88 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Doctolab - Compute Stack (EC2 instances)
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: Doctolab
+
+  KeyName:
+    Type: String
+
+  PublicSubnetAId:
+    Type: String
+
+  PrivateAppSubnetAId:
+    Type: String
+
+  BastionSecurityGroupId:
+    Type: String
+
+  AppSecurityGroupId:
+    Type: String
+
+Resources:
+
+# =========================
+# BASTION INSTANCE
+# =========================
+  BastionInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-04b8aa78946b54b56
+      InstanceType: t3.micro
+      KeyName: Doctolab-Bstn-V2
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          SubnetId: !Ref PublicSubnetAId
+          GroupSet:
+            - !Ref BastionSecurityGroupId
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-bastion
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          yum update -y
+          yum install -y git
+
+# =========================
+# APP INSTANCE
+# =========================
+  AppInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-04b8aa78946b54b56
+      InstanceType: t3.micro
+      KeyName: Doctolab-Bstn-V2
+      IamInstanceProfile: !ImportValue doctolab-iam-app-stack-AppEc2InstanceProfileName
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: false
+          DeviceIndex: 0
+          SubnetId: !Ref PrivateAppSubnetAId
+          GroupSet:
+            - !Ref AppSecurityGroupId
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-app
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          echo "<h1>Doctolab App - ${EnvironmentName}</h1>" > /var/www/html/index.html
+          echo "<p>Private instance</p>" >> /var/www/html/index.html
+
+# =========================
+# OUTPUTS
+# =========================
+Outputs:
+
+  BastionInstanceId:
+    Value: !Ref BastionInstance
+
+  AppInstanceId:
+    Value: !Ref AppInstance

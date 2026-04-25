@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Doctolab - Amazon Macie one-time classification job for a specific S3 bucket
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: doctolab
+
+  TargetBucketName:
+    Type: String
+    Description: Name of the S3 bucket to scan with Amazon Macie
+
+Resources:
+  MacieSession:
+    Type: AWS::Macie::Session
+    Properties:
+      Status: ENABLED
+      FindingPublishingFrequency: FIFTEEN_MINUTES
+
+  MacieClassificationJob:
+    Type: AWS::Macie::ClassificationJob
+    DependsOn: MacieSession
+    Properties:
+      JobType: ONE_TIME
+      Name: !Sub "${EnvironmentName}-macie-job"
+      S3JobDefinition:
+        BucketDefinitions:
+          - AccountId: !Ref AWS::AccountId
+            Buckets:
+              - !Ref TargetBucketName
+      SamplingPercentage: 100
+      InitialRun: true
+
+Outputs:
+  MacieSessionStatus:
+    Description: Macie session enabled in this region
+    Value: ENABLED
+
+  MacieJobId:
+    Description: Identifier of the Macie classification job
+    Value: !Ref MacieClassificationJob
