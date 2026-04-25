@@ -1,6 +1,9 @@
 # 🔐 Doctolab - AWS Cloud Security Architecture
 
 ## 📌 Overview
+## 📸 Architecture
+
+![Architecture](architecture/4.png)
 
 Doctolab is a cloud security project simulating a healthcare application 
 handling sensitive patient data (PII).
